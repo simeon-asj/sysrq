@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HD ↔ DXC Checker</title>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --primary:#2563eb;
+  --primary-dark:#1e40af;
+  --bg-light:#f1f5f9;
+  --bg-dark:#121212;
+  --card-light:#ffffff;
+  --card-dark:#1e1e1e;
+  --danger:#dc2626;
+  --danger-dark:#b91c1c;
+}
+body{
+  font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+  background:var(--bg-light);
+  color:#222;
+  padding:20px;
+  margin:0;
+  transition:background .3s,color .3s;
+}
+body.dark{background:var(--bg-dark);color:#eee}
+
+h1 { text-align: center; }
+h1 span { 
+  margin-bottom:8px;
+  font-size:1.5em;
+  font-weight:800;
+  letter-spacing:7.5px;
+  display:inline-block;
+}
+h1 .helpdesk { background:linear-gradient(90deg,#ff0000,#ff6b6b); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+h1 .amp { color:black; -webkit-text-stroke:1px white; }
+h1 .dxc { background:linear-gradient(90deg,#007bff,#00c6ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+
+.top-bar{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:10px;
+  margin-bottom:20px;
+}
+.mode-label{ font-size:14px; font-weight:600; }
+
+.theme-switch {
+  position: relative; width: 60px; height: 30px; display: inline-block;
+}
+.theme-switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: #ccc; transition: background .3s; border-radius: 34px;
+}
+.slider:before {
+  content: ""; position: absolute; height: 24px; width: 24px;
+  left: 3px; bottom: 3px; background: white; transition: transform .3s;
+  border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+.theme-switch input:checked + .slider { background: var(--primary); }
+.theme-switch input:checked + .slider:before { transform: translateX(30px); }
+
+button{
+  padding:8px 16px; border:none; border-radius:8px; font-size:14px;
+  cursor:pointer; transition:background .2s,transform .1s;
+}
+button:hover:not(:disabled){transform:translateY(-1px);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover:not(:disabled){background:var(--primary-dark);}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-danger:hover:not(:disabled){background:var(--danger-dark);}
+.card{
+  background:var(--card-light); border-radius:12px; padding:25px; margin:0 auto 20px;
+  max-width:600px; box-shadow:0 2px 8px rgba(0,0,0,.08); text-align:center; transition:background .3s;
+}
+body.dark .card{background:var(--card-dark);}
+.drop{
+  border:2px dashed #94a3b8; border-radius:10px; padding:30px; cursor:pointer;
+  transition:border-color .2s,background .2s;
+}
+.drop.dragover{border-color:var(--primary);background:rgba(37,99,235,0.05);}
+body.dark .drop.dragover{background:rgba(37,99,235,0.2);}
+
+table{
+  width:100%; border-collapse:collapse; margin-top:20px;
+  background:var(--card-light); border-radius:12px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+body.dark table{background:var(--card-dark);}
+th,td{ padding:12px 14px; border-bottom:1px solid #e2e8f0; text-align:left; font-size:14px; }
+body.dark th,body.dark td{border-color:#333;}
+th{ background:var(--primary); color:#fff; font-weight:600; }
+
+#overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.45);
+  display:none;
+  z-index:9998;
+}
+#popup{
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:var(--card-light); color:inherit; border-radius:12px;
+  max-width:700px; width:90%; max-height:80vh; overflow-y:auto;
+  display:none; z-index:9999; box-shadow:0 8px 30px rgba(0,0,0,.4);
+}
+body.dark #popup{background:var(--card-dark);}
+#popupHeader{
+  position:sticky; top:0; background:var(--primary); color:#fff;
+  padding:14px; font-weight:600; text-align:center; border-radius:12px 12px 0 0;
+}
+#popupCloseTop{ position:absolute; top:10px; right:16px; background:none; border:none; color:#fff; font-size:22px; cursor:pointer; }
+#popupContent{ padding:18px; white-space:pre-wrap; word-break:break-word; }
+.highlight-row{ background:rgba(220,38,38,.25)!important; }
+.footer{ text-align:center; margin-top:40px; opacity:.7; font-size:13px; }
+#popupTitle { text-transform: uppercase; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span id="modeText" class="mode-label">Switch to Dark Mode</span>
+  <label class="theme-switch">
+    <input type="checkbox" id="toggle">
+    <span class="slider"></span>
+  </label>
+</div>
+
+<h1>
+  <span class="helpdesk">HELPDESK</span>
+  <span class="amp">↔</span>
+  <span class="dxc">DXC CHECKER</span>
+</h1>
+
+<div class="card">
+  <div id="drop1" class="drop">Drop <b>Jollibee Revised Excel</b> here or click</div>
+  <input type="file" id="file1" accept=".xls,.xlsx" style="display:none">
+</div>
+
+<div class="card">
+  <div id="drop2" class="drop">Drop <b>DXC Excel</b> here or click</div>
+  <input type="file" id="file2" accept=".xls,.xlsx" style="display:none">
+</div>
+
+<div style="text-align:center;margin-bottom:20px;">
+  <button id="compare" class="btn-primary" disabled>Compare</button>
+  <button id="download" class="btn-primary" disabled>Download Mismatches</button>
+  <button id="clear" class="btn-danger">Clear Contents</button>
+</div>
+
+<div id="results"></div>
+
+<!-- Popup -->
+<div id="overlay"></div>
+<div id="popup">
+  <div id="popupHeader">
+    <span id="popupTitle">Historical Remarks</span>
+    <button id="popupCloseTop">&times;</button>
+  </div>
+  <div id="popupContent"></div>
+  <div style="text-align:center;padding:14px;">
+    <button onclick="hidePopup()" class="btn-primary">Close</button>
+  </div>
+</div>
+
+<p class="footer">DXC CHECKER&nbsp;1.0.4 &nbsp; © 2025, Arvin Jusay</p>
+
+<script>
+let data1=null, data2=null, highlightedRow=null;
+const histMap={}, dateMap={};
+function norm(s){return (s||"").toString().toLowerCase().replace(/\s+/g," ").trim();}
+
+// Correct Excel serial → JS Date conversion
+function excelDateToJS(serial) {
+  if (serial == null || serial === "") return "";
+  if (typeof serial === "number") {
+    // Excel's epoch: 1900-01-01; Excel incorrectly treats 1900 as leap year
+    const excelEpoch = new Date(Date.UTC(1899,11,30));
+    const days = Math.floor(serial);
+    const msPerDay = 24*60*60*1000;
+    const date = new Date(excelEpoch.getTime() + days * msPerDay + Math.round((serial - days)*msPerDay));
+    
+    const month = String(date.getUTCMonth()+1).padStart(2,'0');
+    const day = String(date.getUTCDate()).padStart(2,'0');
+    const year = date.getUTCFullYear();
+    let hours = date.getUTCHours();
+    const minutes = String(date.getUTCMinutes()).padStart(2,'0');
+    const ampm = hours >=12 ? 'PM':'AM';
+    hours = hours % 12 || 12;
+    return `${month}/${day}/${year} ${hours}:${minutes} ${ampm}`;
+  }
+  return serial.toString();
+}
+
+function readSheet(sheet,patterns){
+  const aoa=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:""});
+  let hdr=-1;
+  for(let i=0;i<aoa.length;i++){
+    const txt=aoa[i].join(" ").toLowerCase();
+    if(patterns.every(p=>p.test(txt))){hdr=i; break;}
+  }
+  if(hdr==-1) return null;
+  return XLSX.utils.sheet_to_json(XLSX.utils.aoa_to_sheet(aoa.slice(hdr)),{defval:""});
+}
+
+function handleFile(f,is1,cb){
+  const r=new FileReader();
+  r.onload=e=>{
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    const pats=is1?[ /call\s*status/i,/ho\s*it\s*ticket/i ]:[ /number/i,/state/i ];
+    const js=readSheet(sh,pats);
+    if(!js){alert(`Missing required columns in ${f.name}`);return;}
+    const mapped=js.map(row=>{
+      if(is1){
+        const t=row["HO IT TICKET #"]||row["Ho IT Ticket #"]||row["HO IT Ticket"]||row["HO IT Ticket No."]||"";
+        const hist=row["Historical Remarks"]||row["HISTORICAL REMARKS"]||"";
+        const date=excelDateToJS(row["LAST UPDATE"]||row["Last Update"]);
+        if(t){ histMap[t]=hist; dateMap[t]=date||""; }
+        return { TASK:t, STATUS:row["CALL STATUS"]||row["Call Status"], CLOSED_BY:row["CLOSED BY"]||row["Closed By"]||"" };
+      } else {
+        return { TASK:row["NUMBER"]||row["Number"], STATUS:row["STATE"]||row["State"], CREATED:row["CREATED"]||row["Created"]||row["Opened"]||"" };
+      }
+    });
+    cb(mapped,f.name);
+  };
+  r.readAsArrayBuffer(f);
+}
+
+function setupDrop(id,input,is1,setter){
+  const dz=document.getElementById(id), inp=document.getElementById(input);
+  dz.onclick=()=>inp.click();
+  dz.ondragover=e=>{ e.preventDefault(); dz.classList.add("dragover"); };
+  dz.ondragleave=()=>dz.classList.remove("dragover");
+  dz.ondrop=e=>{
+    e.preventDefault(); dz.classList.remove("dragover");
+    if(e.dataTransfer.files.length) read(e.dataTransfer.files[0]);
+  };
+  inp.onchange=e=>{ if(e.target.files.length) read(e.target.files[0]); };
+  function read(f){ handleFile(f,is1,(data,name)=>{
+    setter(data); dz.textContent="Loaded: "+name;
+    document.getElementById("compare").disabled=!(data1&&data2);
+  }); }
+}
+setupDrop("drop1","file1",true,d=>data1=d);
+setupDrop("drop2","file2",false,d=>data2=d);
+
+document.getElementById("compare").onclick=()=>{
+  const m1={}, m2={};
+  data1.forEach(r=>{ if(r.TASK) m1[r.TASK]=r; });
+  data2.forEach(r=>{ if(r.TASK) m2[r.TASK]={status:norm(r.STATUS)}; });
+  const mism=[];
+  for(const t in m1){
+    if(m2[t]){
+      const s1=norm(m1[t].STATUS), s2=m2[t].status;
+      if(s1!==s2)
+        mism.push({
+          TASK:t,
+          "STATUS File1":m1[t].STATUS,
+          "STATUS File2":m2[t].status,
+          "CLOSED BY":m1[t].CLOSED_BY,
+          DATE:dateMap[t]||"" 
+        });
+    }
+  }
+  const closed=mism.filter(r=>norm(r["STATUS File1"]).includes("closed"));
+  const extra=[];
+  data2.forEach(r=>{
+    if(!m1[r.TASK] && ["work in progress","pending"].some(t=>norm(r.STATUS).includes(t)))
+      extra.push({ TASK:r.TASK, "STATUS File1":"—", "STATUS File2":r.STATUS, "CLOSED BY":"", DATE:"" });
+  });
+  showResults(closed.concat(extra));
+};
+
+function showResults(rows){
+  const res=document.getElementById("results"); res.innerHTML="";
+  if(!rows.length){ res.textContent="ALL TICKET FROM HELPDESK WAS CLOSED."; return; }
+  const tbl=document.createElement("table");
+  tbl.innerHTML="<thead><tr><th>TASK</th><th>HELPDESK</th><th>DXC</th><th>CLOSED BY</th><th>CLOSED DATE</th><th>ACTION TAKEN</th></tr></thead>";
+  const tb=document.createElement("tbody");
+  rows.forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${r.TASK}</td><td>${r["STATUS File1"]}</td><td>${r["STATUS File2"]}</td>
+                  <td>${r["CLOSED BY"]}</td><td>${r.DATE||""}</td>
+                  <td><button class="btn-primary" onclick="showRemarks('${encodeURIComponent(r.TASK)}',this)">View</button></td>`;
+    tb.appendChild(tr);
+  });
+  tbl.appendChild(tb); res.appendChild(tbl);
+  const total=document.createElement("div");
+  total.style.marginTop="10px"; total.style.fontWeight="600";
+  total.textContent=`Total Tasks: ${rows.length}`; res.appendChild(total);
+  window.mismatchRows=rows; document.getElementById("download").disabled=false;
+}
+
+function showRemarks(task,btn){
+  const t=decodeURIComponent(task);
+  document.getElementById("popupTitle").textContent=`Historical Remarks from ${t}`;
+  document.getElementById("popupContent").textContent=histMap[t]||"No historical remarks found.";
+  document.getElementById("popup").style.display="block";
+  document.getElementById("overlay").style.display="block";
+  document.body.style.overflow="hidden";
+  if(highlightedRow) highlightedRow.classList.remove("highlight-row");
+  highlightedRow=btn.closest("tr"); highlightedRow.classList.add("highlight-row");
+}
+function hidePopup(){
+  document.getElementById("popup").style.display="none";
+  document.getElementById("overlay").style.display="none";
+  document.body.style.overflow="";
+  if(highlightedRow){ highlightedRow.classList.remove("highlight-row"); highlightedRow=null; }
+}
+document.getElementById("popupCloseTop").onclick=hidePopup;
+
+document.getElementById("download").onclick=()=>{
+  if(!window.mismatchRows?.length) return;
+  const ws=XLSX.utils.json_to_sheet(window.mismatchRows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Closed_Mismatches");
+  XLSX.writeFile(wb,"closed_mismatches.xlsx");
+};
+document.getElementById("clear").onclick=()=>{
+  data1=data2=null; window.mismatchRows=null;
+  document.getElementById("drop1").textContent="Drop Jollibee Revised Excel here or click";
+  document.getElementById("drop2").textContent="Drop DXC Excel here or click";
+  document.getElementById("results").innerHTML="";
+  document.getElementById("compare").disabled=true;
+  document.getElementById("download").disabled=true;
+};
+
+const toggle = document.getElementById("toggle");
+const modeText = document.getElementById("modeText");
+toggle.addEventListener("change", () => {
+  const dark = toggle.checked;
+  document.body.classList.toggle("dark", dark);
+  modeText.textContent = dark ? "Switch to Light Mode" : "Switch to Dark Mode";
+});
+</script>
+</body>
+</html>
